@@ -26,6 +26,7 @@ def main(args=None):
   executors = sc._conf.get("spark.executor.instances")
   num_executors = int(executors) if executors is not None else 1
   num_ps = 1
+  logging.info("============= Num of executors: {0}".format(num_executors))
 
   # parse args
   parser = argparse.ArgumentParser()
@@ -33,7 +34,7 @@ def main(args=None):
   parser.add_argument("--mitosis_img_dir", required=True, help="path to the mitosis image file")
   parser.add_argument("--normal_img_dir", required=True, help="path to the normal image file")
 
-  parser.add_argument("--batch_size", help="number of records per batch", type=int, default=100)
+  parser.add_argument("--batch_size", help="number of records per batch", type=int, default=16)
   parser.add_argument("--epochs", help="number of epochs", type=int, default=1)
   parser.add_argument("--export_dir", help="HDFS path to export saved_model",
                       default="mnist_export")
@@ -48,7 +49,7 @@ def main(args=None):
   parser.add_argument("--output", help="HDFS path to save test/inference output",
                       default="predictions")
   parser.add_argument("--readers", help="number of reader/enqueue threads", type=int, default=1)
-  parser.add_argument("--steps", help="maximum number of steps", type=int, default=1000)
+  parser.add_argument("--steps", help="maximum number of steps", type=int, default=99)
   parser.add_argument("--tensorboard", help="launch tensorboard process", action="store_true")
   parser.add_argument("--mode", help="train|inference", default="train")
   parser.add_argument("--rdma", help="use rdma connection", default=False)
@@ -56,18 +57,25 @@ def main(args=None):
 
 
   # get mitosis images and labels
+  # note that the numpy.ndarray could not be the key of RDD
   mitosis_img_df = ImageSchema.readImages(args.mitosis_img_dir, recursive=True)
-  mitosis_train_rdd = mitosis_img_df.rdd.map(toNpArray).map(lambda img : (img, 1))
+  mitosis_train_rdd = mitosis_img_df.rdd.map(toNpArray).map(lambda img : (1, img))
+  print("================", mitosis_train_rdd.count())
 
   # get normal images and labels
   normal_img_df = ImageSchema.readImages(args.normal_img_dir, recursive=True)
-  normal_train_rdd = normal_img_df.rdd.map(toNpArray).map(lambda img: (img, 0))
+  normal_train_rdd = normal_img_df.rdd.map(toNpArray).map(lambda img: (0, img))
+  print("================", normal_train_rdd.count())
 
   # get the train data set with mitosis and normal images
-  data_RDD = mitosis_train_rdd.join(normal_train_rdd)
+  data_RDD = mitosis_train_rdd.union(normal_train_rdd) #.repartition(args.cluster_size)
 
-  for row in mitosis_train_rdd.collect():
-    print(row.shape)
+  print("================", data_RDD.count())
+
+  sRDD = data_RDD.mapPartitions(lambda iter: [sum(1 for _ in iter)])
+
+  for row in sRDD.collect():
+    print("======================", row)
 
 
   cluster = TFCluster.run(sc, mitosis_dist.map_fun, args, args.cluster_size, num_ps, args.tensorboard,

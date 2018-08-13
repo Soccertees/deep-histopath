@@ -35,7 +35,7 @@ class ExportHook(tf.train.SessionRunHook):
     logging.info("{} ====== Done exporting".format(datetime.now().isoformat()))
 
 
-def map_fun(args, ctx, model_name="resnet", img_h=64, img_w=64, img_c=3):
+def map_fun(args, ctx, model_name="resnet_new", img_h=64, img_w=64, img_c=3):
   import numpy
   import time
   from train_mitoses import create_model, compute_data_loss, compute_metrics
@@ -49,22 +49,21 @@ def map_fun(args, ctx, model_name="resnet", img_h=64, img_w=64, img_c=3):
     time.sleep((worker_num + 1) * 5 )
 
   # Parameters
-  IMAGE_PIXELS = 28
-  hidden_units = 128
   batch_size = args.batch_size
 
   # Get TF cluster and server instances
   cluster, server = ctx.start_cluster_server(1, args.rdma)
 
   def feed_dict(batch):
-    # Convert from [(images, labels)] to two numpy arrays of the proper type
+    # Convert from [(labels, images)] to two numpy arrays of the proper type
     images = []
     labels = []
     for item in batch:
-      images.append(item[0])
-      labels.append(item[1])
+      images.append(item[1])
+      labels.append(item[0])
     img_batch = numpy.array(images, dtype=numpy.float32)
-    label_batch = numpy.array(labels, dtype=numpy.float32)
+    label_batch = numpy.array(labels, dtype=numpy.float32).reshape(-1, 1)
+
     return img_batch, label_batch
 
   if job_name == "ps":
@@ -89,15 +88,48 @@ def map_fun(args, ctx, model_name="resnet", img_h=64, img_w=64, img_c=3):
         probs = tf.nn.sigmoid(logits, name="probs")
         preds = tf.round(probs, name="preds")
 
-      with tf.name_scope("loss"):
-        with tf.control_dependencies([tf.assert_equal(tf.shape(labels_var)[0], tf.shape(logits)[0])]):
-          loss = compute_data_loss(labels_var, logits)
-          tf.summary.scalar("loss", loss)
+      # with tf.name_scope('layer'):
+      #   # Variables of the hidden layer
+      #   with tf.name_scope('hidden_layer'):
+      #     # Convolutional Layer #1
+      #     conv1 = tf.layers.conv2d(
+      #       inputs=images_var,
+      #       filters=32,
+      #       kernel_size=[5, 5],
+      #       padding="same",
+      #       activation=tf.nn.relu)
+      #
+      #     # Pooling Layer #1
+      #     pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[2, 2], strides=2)
+      #
+      #     # Convolutional Layer #2 and Pooling Layer #2
+      #     conv2 = tf.layers.conv2d(
+      #       inputs=pool1,
+      #       filters=64,
+      #       kernel_size=[5, 5],
+      #       padding="same",
+      #       activation=tf.nn.relu)
+      #     pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=[2, 2], strides=2)
+      #
+      #     # Dense Layer
+      #     pool2_flat = tf.reshape(pool2, [-1, 16 * 16 * 64])
+      #     dense = tf.layers.dense(inputs=pool2_flat, units=1024, activation=tf.nn.relu)
+      #     dropout = tf.layers.dropout(inputs=dense, rate=0.4)
+      #
+      #     # Logits Layer
+      #     logits = tf.layers.dense(inputs=dropout, units=1)
+      #     probs = tf.nn.sigmoid(logits, name="probs")
+      #     preds = tf.round(probs, name="preds")
 
       global_step = tf.train.get_or_create_global_step()
 
+      with tf.name_scope("loss"):
+        with tf.control_dependencies([tf.assert_equal(tf.shape(labels_var)[0], tf.shape(preds)[0])]):
+          loss = compute_data_loss(labels_var, logits)
+          tf.summary.scalar("loss", loss)
+
       with tf.name_scope("train"):
-        train_op = tf.train.AdagradDAOptimizer(0.01).minimize(loss, global_step=global_step)
+        train_op = tf.train.AdagradOptimizer(0.01).minimize(loss, global_step=global_step)
 
       with tf.name_scope("metrics"):
         num_thresholds = 11
@@ -133,18 +165,27 @@ def map_fun(args, ctx, model_name="resnet", img_h=64, img_w=64, img_c=3):
       step = 0
       tf_feed = ctx.get_data_feed(args.mode == "train")
       while not mon_sess.should_stop() and not tf_feed.should_stop():
-        batch_imgs, batch_labels = feed_dict(tf_feed.next_batch(batch_size))
+        fetch = tf_feed.next_batch(batch_size)
+        logging.info("============= fetch type : {0}".format(type(fetch)))
+        batch_imgs, batch_labels = feed_dict(fetch)
         feed = {images_var: batch_imgs, labels_var: batch_labels}
 
         if len(batch_imgs) > 0:
           if args.mode == "train":
-            _, summary, step = mon_sess.run([train_op, summary_op, global_step], feed_dict=feed)
+            _, summary, step, acc_output, probs_output, preds_output, labels_output\
+              = mon_sess.run([train_op, summary_op, global_step, acc, probs, preds, labels_var],
+                             feed_dict=feed)
 
             # print accuary and save model checkpoints to HDFS every 100 steps
-            if (step % 100 == 0):
-              logging.info("{0} step: {1} accuracy: {2}".format(datetime.now().isoformat(),
-                                                                step,
-                                                                mon_sess.run(acc, feed)))
+            if (step % 1 == 0):
+              logging.info("{0} step: {1} accuracy: {2} probs: {3} preds: {4} labels: {5}".format(
+                datetime.now().isoformat(),
+                step,
+                acc_output,
+                probs_output,
+                preds_output,
+                labels_output
+                ))
             if task_index == 0:
               summary_writer.add_summary(summary, step)
           else:
