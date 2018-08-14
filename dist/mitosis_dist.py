@@ -160,7 +160,7 @@ def map_fun(args, ctx, model_name="resnet_new", img_h=64, img_w=64, img_c=3):
                                            hooks=[tf.train.StopAtStepHook(last_step=args.steps)],
                                            chief_only_hooks=
                                            [ExportHook(ctx.absolute_path(args.export_dir),
-                                                       task_index,
+                                                       images_var,
                                                        preds)]) as mon_sess:
       step = 0
       tf_feed = ctx.get_data_feed(args.mode == "train")
@@ -172,20 +172,21 @@ def map_fun(args, ctx, model_name="resnet_new", img_h=64, img_w=64, img_c=3):
 
         if len(batch_imgs) > 0:
           if args.mode == "train":
-            _, summary, step, acc_output, probs_output, preds_output, labels_output\
-              = mon_sess.run([train_op, summary_op, global_step, acc, probs, preds, labels_var],
+            _, summary, step, metric_update, probs_output, preds_output, labels_output\
+              = mon_sess.run([train_op, summary_op, global_step, metric_update_ops, probs, preds, labels_var],
                              feed_dict=feed)
 
             # print accuary and save model checkpoints to HDFS every 100 steps
-            if (step % 1 == 0):
+            if (step % 10 == 0):
               logging.info("{0} step: {1} accuracy: {2} probs: {3} preds: {4} labels: {5}".format(
                 datetime.now().isoformat(),
                 step,
-                acc_output,
+                mon_sess.run(acc),
                 probs_output,
                 preds_output,
                 labels_output
                 ))
+
             if task_index == 0:
               summary_writer.add_summary(summary, step)
           else:
@@ -196,7 +197,7 @@ def map_fun(args, ctx, model_name="resnet_new", img_h=64, img_w=64, img_c=3):
             print("results: {0}, acc: {1}".format(results, acc_output))
 
 
-      if mon_sess.should_stop() or step >= args.steps:
+      if mon_sess.should_stop() or step >= args.steps or len(batch_imgs) <= 0:
         tf_feed.terminate()
 
     # Ask for all the services to stop
