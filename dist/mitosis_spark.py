@@ -9,6 +9,7 @@ from pyspark import SparkContext, SparkConf
 
 from pyspark.ml.image import ImageSchema
 from tensorflowonspark import TFCluster
+from datetime import datetime
 
 from dist.utils import toNpArray
 
@@ -86,6 +87,10 @@ def main(args=None):
   else:
     labelRDD = cluster.inference(data_RDD)
     labelRDD.saveAsTextFile(args.output)
+
+  cluster.shutdown(grace_secs=30)
+
+  print("{0} ===== Stop".format(datetime.now().isoformat()))
 
 
 if __name__ == "__main__":
