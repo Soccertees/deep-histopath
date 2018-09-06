@@ -11,7 +11,7 @@ from pyspark.ml.image import ImageSchema
 from tensorflowonspark import TFCluster
 from datetime import datetime
 
-from dist.utils import toNpArray
+from dist.utils import toNpArray, genBinaryFileRDD, image_decoder
 
 import dist.mitosis_dist as mitosis_dist
 
@@ -35,7 +35,7 @@ def main(args=None):
   parser.add_argument("--mitosis_img_dir", required=True, help="path to the mitosis image file")
   parser.add_argument("--normal_img_dir", required=True, help="path to the normal image file")
 
-  parser.add_argument("--batch_size", help="number of records per batch", type=int, default=16)
+  parser.add_argument("--batch_size", help="number of records per batch", type=int, default=32)
   parser.add_argument("--epochs", help="number of epochs", type=int, default=1)
   parser.add_argument("--export_dir", help="HDFS path to export saved_model",
                       default="mnist_export")
@@ -56,27 +56,34 @@ def main(args=None):
   parser.add_argument("--rdma", help="use rdma connection", default=False)
   args = parser.parse_args(args)
 
+  mitosis_train_rdd = genBinaryFileRDD(sc, args.mitosis_img_dir, numPartitions=1)\
+    .map(lambda x: (1, image_decoder(x[1])))
+
+  normal_train_rdd = genBinaryFileRDD(sc, args.normal_img_dir, numPartitions=3) \
+    .map(lambda x: (0, image_decoder(x[1])))
+
 
   # get mitosis images and labels
   # note that the numpy.ndarray could not be the key of RDD
-  mitosis_img_df = ImageSchema.readImages(args.mitosis_img_dir, recursive=True)
-  mitosis_train_rdd = mitosis_img_df.rdd.map(toNpArray).map(lambda img : (1, img))
-  print("================", mitosis_train_rdd.count())
+  #mitosis_img_df = ImageSchema.readImages(args.mitosis_img_dir, recursive=True)
+  #mitosis_train_rdd = mitosis_img_df.rdd.map(toNpArray).map(lambda img : (1, img))
+  #print("================", mitosis_train_rdd.count())
 
   # get normal images and labels
-  normal_img_df = ImageSchema.readImages(args.normal_img_dir, recursive=True)
-  normal_train_rdd = normal_img_df.rdd.map(toNpArray).map(lambda img: (0, img))
-  print("================", normal_train_rdd.count())
+  #normal_img_df = ImageSchema.readImages(args.normal_img_dir, recursive=True)
+  #normal_train_rdd = normal_img_df.rdd.map(toNpArray).map(lambda img: (0, img))
+  #print("================", normal_train_rdd.count())
 
   # get the train data set with mitosis and normal images
   data_RDD = mitosis_train_rdd.union(normal_train_rdd) #.repartition(args.cluster_size)
 
-  print("================", data_RDD.count())
 
-  sRDD = data_RDD.mapPartitions(lambda iter: [sum(1 for _ in iter)])
-
-  for row in sRDD.collect():
-    print("======================", row)
+  # print("================", data_RDD.count())
+  #
+  # sRDD = data_RDD.mapPartitions(lambda iter: [sum(1 for _ in iter)])
+  #
+  # for row in sRDD.collect():
+  #   print("======================", row)
 
 
   cluster = TFCluster.run(sc, mitosis_dist.map_fun, args, args.cluster_size, num_ps, args.tensorboard,

@@ -166,7 +166,6 @@ def map_fun(args, ctx, model_name="resnet_new", img_h=64, img_w=64, img_c=3):
       tf_feed = ctx.get_data_feed(args.mode == "train")
       while not mon_sess.should_stop() and not tf_feed.should_stop():
         fetch = tf_feed.next_batch(batch_size)
-        logging.info("============= fetch type : {0}".format(type(fetch)))
         batch_imgs, batch_labels = feed_dict(fetch)
         feed = {images_var: batch_imgs, labels_var: batch_labels}
 
@@ -176,8 +175,8 @@ def map_fun(args, ctx, model_name="resnet_new", img_h=64, img_w=64, img_c=3):
               = mon_sess.run([train_op, summary_op, global_step, metric_update_ops, probs, preds, labels_var],
                              feed_dict=feed)
 
-            # print accuary and save model checkpoints to HDFS every 100 steps
-            if (step % 10 == 0):
+            # print accuary and save model checkpoints to HDFS every 1000 steps
+            if step % 1000 == 0:
               logging.info("{0} step: {1} accuracy: {2} probs: {3} preds: {4} labels: {5}".format(
                 datetime.now().isoformat(),
                 step,
@@ -201,7 +200,7 @@ def map_fun(args, ctx, model_name="resnet_new", img_h=64, img_w=64, img_c=3):
         tf_feed.terminate()
 
     # Ask for all the services to stop
-    print("{0} stopping MonitoredTrainingSession".format(datetime.now().isoformat()))
+    logging.info("{0} stopping MonitoredTrainingSession".format(datetime.now().isoformat()))
 
   if job_name == "worker" and task_index == 0:
     summary_writer.close()
