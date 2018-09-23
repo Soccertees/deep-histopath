@@ -11,7 +11,7 @@ from pyspark.ml.image import ImageSchema
 from tensorflowonspark import TFCluster
 from datetime import datetime
 
-from dist.utils import toNpArray, genBinaryFileRDD, image_decoder
+from dist.utils import toNpArray, genBinaryFileRDD, image_decoder, get_hdfs, read_images
 
 import dist.mitosis_dist as mitosis_dist
 
@@ -32,8 +32,12 @@ def main(args=None):
   # parse args
   parser = argparse.ArgumentParser()
   parser.add_argument("--appName", default="mitosis_spark", help="application name")
-  parser.add_argument("--mitosis_img_dir", required=True, help="path to the mitosis image file")
-  parser.add_argument("--normal_img_dir", required=True, help="path to the normal image file")
+  parser.add_argument("--hdfs_host", help="HDFS host", type=str, default="default")
+  parser.add_argument("--hdfs_port", help="HDFS port", type=int, default=8020)
+  parser.add_argument("--mitosis_img_dir", help="path to the mitosis image files")
+  parser.add_argument("--mitosis_img_csv", help="csv file that contain all the mitosis image files")
+  parser.add_argument("--normal_img_dir", required=True, help="path to the normal image files")
+  parser.add_argument("--normal_img_csv", help="csv file that contain all the normal image files")
 
   parser.add_argument("--batch_size", help="number of records per batch", type=int, default=32)
   parser.add_argument("--epochs", help="number of epochs", type=int, default=1)
@@ -41,8 +45,6 @@ def main(args=None):
                       default="mnist_export")
   parser.add_argument("--format", help="example format: (csv|pickle|tfr)",
                       choices=["csv", "pickle", "tfr"], default="csv")
-  # parser.add_argument("--images", help="HDFS path to MNIST images in parallelized format")
-  # parser.add_argument("--labels", help="HDFS path to MNIST labels in parallelized format")
   parser.add_argument("--model", help="HDFS path to save/load model during train/inference",
                       default="mnist_model")
   parser.add_argument("--cluster_size", help="number of nodes in the cluster", type=int,
@@ -56,35 +58,36 @@ def main(args=None):
   parser.add_argument("--rdma", help="use rdma connection", default=False)
   args = parser.parse_args(args)
 
-  mitosis_train_rdd = genBinaryFileRDD(sc, args.mitosis_img_dir, numPartitions=1)\
-    .map(lambda x: (1, image_decoder(x[1])))
+  if args.mitosis_img_dir is None and args.mitosis_img_csv is None:
+    parser.error("at least one of --mitosis_img_dir and --mitosis_img_csv required")
 
-  normal_train_rdd = genBinaryFileRDD(sc, args.normal_img_dir, numPartitions=3) \
-    .map(lambda x: (0, image_decoder(x[1])))
+  if args.normal_img_dir is None and args.normal_img_csv is None:
+    parser.error("at least one of --normal_img_dir and --normal_img_csv required")
 
+  if args.mitosis_img_csv is None:
+    fs = get_hdfs(args.hdfs_host, args.hdfs_port)
+    mitosis_img_pathes = fs.ls(args.mitosis_img_dir)
+    mitosis_label_img_pathes = [(1, path) for path in mitosis_img_pathes]
+    #mitosis_train_rdd = sc.parallelize(mitosis_img_pathes).map(lambda path : (1, path))
+  else:
+    mitosis_train_rdd = sc.read.textFile(args.mitosis_img_csv).map(lambda path : (1, path))
 
-  # get mitosis images and labels
-  # note that the numpy.ndarray could not be the key of RDD
-  #mitosis_img_df = ImageSchema.readImages(args.mitosis_img_dir, recursive=True)
-  #mitosis_train_rdd = mitosis_img_df.rdd.map(toNpArray).map(lambda img : (1, img))
-  #print("================", mitosis_train_rdd.count())
+  if args.normal_img_csv is None:
+    fs = get_hdfs(args.hdfs_host, args.hdfs_port)
+    normal_img_pathes = fs.ls(args.normal_img_dir)
+    normal_label_img_pathes = [(0, path) for path in normal_img_pathes]
+    #normal_train_rdd = sc.parallelize(normal_img_pathes).map(lambda path : (0, path))
+  else:
+    normal_train_rdd = sc.read.textFile(args.normal_img_csv).map(lambda path : (0, path))
 
-  # get normal images and labels
-  #normal_img_df = ImageSchema.readImages(args.normal_img_dir, recursive=True)
-  #normal_train_rdd = normal_img_df.rdd.map(toNpArray).map(lambda img: (0, img))
-  #print("================", normal_train_rdd.count())
-
-  # get the train data set with mitosis and normal images
-  data_RDD = mitosis_train_rdd.union(normal_train_rdd) #.repartition(args.cluster_size)
-
-
-  # print("================", data_RDD.count())
-  #
-  # sRDD = data_RDD.mapPartitions(lambda iter: [sum(1 for _ in iter)])
-  #
-  # for row in sRDD.collect():
-  #   print("======================", row)
-
+  # get the train data set with mitosis and normal images. In the output RDD,
+  # each entry will be (label, img_arr)
+  training_data = []
+  training_data.extend(mitosis_label_img_pathes)
+  training_data.extend(normal_label_img_pathes)
+  data_RDD = sc.parallelize(training_data) \
+    .repartition(args.cluster_size - 1) \
+    .mapPartitions(lambda iter : read_images(get_hdfs(args.hdfs_host, args.hdfs_port), iter))
 
   cluster = TFCluster.run(sc, mitosis_dist.map_fun, args, args.cluster_size, num_ps, args.tensorboard,
                           TFCluster.InputMode.SPARK, log_dir=args.model)
