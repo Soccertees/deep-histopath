@@ -9,6 +9,7 @@ from PIL import Image
 from io import BytesIO
 import logging
 import pyarrow as pa
+import socket
 
 
 def toNpArray(row):
@@ -86,9 +87,12 @@ def read_images(fs, img_path_batch, mode="rb"):
   :return: a list of numpy array
   """
   result = []
+  logging.info("Start to read images at {}".format(socket.gethostname()))
   for (label, img_path) in img_path_batch:
     img = read_image(fs, img_path, mode)
     result.append((label, img))
+  logging.info("Finish the reading of {} images on {}".format(
+    len(result), socket.gethostname()))
   return result
 
 
