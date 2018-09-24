@@ -8,6 +8,7 @@ import tensorflow as tf
 from tensorflowonspark import TFNode
 import logging
 import random
+import time
 
 def print_log(worker_num, arg):
   logging.info("{0}: {1}".format(worker_num, arg))
@@ -40,6 +41,8 @@ def map_fun(args, ctx, model_name="resnet_new", img_h=64, img_w=64, img_c=3):
   import numpy
   import time
   from train_mitoses import create_model, compute_data_loss, compute_metrics
+
+  start_time = time.time()
 
   worker_num = ctx.worker_num
   job_name = ctx.job_name
@@ -172,10 +175,12 @@ def map_fun(args, ctx, model_name="resnet_new", img_h=64, img_w=64, img_c=3):
         logging.info("Some issues get_data_feed")
 
       while not mon_sess.should_stop() and not tf_feed.should_stop():
+        start_time = time.time()
         fetch = tf_feed.next_batch(batch_size)
         batch_imgs, batch_labels = feed_dict(fetch)
         feed = {images_var: batch_imgs, labels_var: batch_labels}
-
+        logging.info("Start the step {}; the size of image batch is {}"
+                     .format(step, len(batch_imgs)))
         if len(batch_imgs) > 0:
           if args.mode == "train":
             _, summary, step, metric_update, probs_output, preds_output, labels_output\
@@ -183,14 +188,14 @@ def map_fun(args, ctx, model_name="resnet_new", img_h=64, img_w=64, img_c=3):
                              feed_dict=feed)
 
             # print accuary and save model checkpoints to HDFS every 1000 steps
-            if step % 1000 == 0:
+            if step % 1 == 0:
               logging.info("{0} step: {1} accuracy: {2} probs: {3} preds: {4} labels: {5}".format(
                 datetime.now().isoformat(),
                 step,
                 mon_sess.run(acc),
-                probs_output,
-                preds_output,
-                labels_output
+                probs_output[0],
+                preds_output[0],
+                labels_output[0]
                 ))
 
             if task_index == 0:
@@ -202,6 +207,9 @@ def map_fun(args, ctx, model_name="resnet_new", img_h=64, img_w=64, img_c=3):
             tf_feed.bath_results(results)
             print("results: {0}, acc: {1}".format(results, acc_output))
 
+          end_time = time.time()
+          logging.info("Step {} took {} ms".format(
+            step, (end_time - start_time) * 1000))
 
       if mon_sess.should_stop() or step >= args.steps or len(batch_imgs) <= batch_size:
         tf_feed.terminate()
