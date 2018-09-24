@@ -9,6 +9,7 @@ from tensorflowonspark import TFNode
 import logging
 import random
 import time
+import socket
 
 def print_log(worker_num, arg):
   logging.info("{0}: {1}".format(worker_num, arg))
@@ -42,7 +43,7 @@ def map_fun(args, ctx, model_name="resnet_new", img_h=64, img_w=64, img_c=3):
   import time
   from train_mitoses import create_model, compute_data_loss, compute_metrics
 
-  start_time = time.time()
+  logging.info("Start the training worker at {}".format(socket.gethostname()))
 
   worker_num = ctx.worker_num
   job_name = ctx.job_name
