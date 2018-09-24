@@ -212,7 +212,7 @@ def map_fun(args, ctx, model_name="resnet_new", img_h=64, img_w=64, img_c=3):
           logging.info("Step {} took {} ms".format(
             step, (end_time - start_time) * 1000))
 
-      if mon_sess.should_stop() or step >= args.steps or len(batch_imgs) <= batch_size:
+      if mon_sess.should_stop() or step >= args.steps:
         tf_feed.terminate()
 
     # Ask for all the services to stop
