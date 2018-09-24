@@ -7,6 +7,7 @@ from datetime import datetime
 import tensorflow as tf
 from tensorflowonspark import TFNode
 import logging
+import random
 
 def print_log(worker_num, arg):
   logging.info("{0}: {1}".format(worker_num, arg))
@@ -29,7 +30,7 @@ class ExportHook(tf.train.SessionRunHook):
     }
 
     TFNode.export_saved_model(session,
-                              self.export_dir,
+                              self.export_dir + '_' + str(random.random()),
                               tf.saved_model.tag_constants.SERVING,
                               signatures)
     logging.info("{} ====== Done exporting".format(datetime.now().isoformat()))
@@ -132,7 +133,7 @@ def map_fun(args, ctx, model_name="resnet_new", img_h=64, img_w=64, img_c=3):
         train_op = tf.train.AdagradOptimizer(0.01).minimize(loss, global_step=global_step)
 
       with tf.name_scope("metrics"):
-        num_thresholds = 11
+        num_thresholds = 8
         mean_loss, acc, ppv, sens, f1, pr, f1s, metric_update_ops, metric_reset_ops \
           = compute_metrics(loss, labels_var, preds, probs, num_thresholds)
         f1_max = tf.reduce_max(f1s)
@@ -146,7 +147,7 @@ def map_fun(args, ctx, model_name="resnet_new", img_h=64, img_w=64, img_c=3):
       summary_op = tf.summary.merge_all()
 
     logdir = ctx.absolute_path(args.model)
-    print("tensorflow model path: {0}".format(logdir))
+    logging.info("tensorflow model path: {0}".format(logdir))
 
     if job_name == "worker" and task_index == 0:
       summary_writer = tf.summary.FileWriter(logdir, graph=tf.get_default_graph())
@@ -163,7 +164,13 @@ def map_fun(args, ctx, model_name="resnet_new", img_h=64, img_w=64, img_c=3):
                                                        images_var,
                                                        preds)]) as mon_sess:
       step = 0
+      batch_imgs = []
       tf_feed = ctx.get_data_feed(args.mode == "train")
+      logging.info("Start the step {}".format(step))
+
+      if tf_feed.should_stop:
+        logging.info("Some issues get_data_feed")
+
       while not mon_sess.should_stop() and not tf_feed.should_stop():
         fetch = tf_feed.next_batch(batch_size)
         batch_imgs, batch_labels = feed_dict(fetch)
@@ -196,7 +203,7 @@ def map_fun(args, ctx, model_name="resnet_new", img_h=64, img_w=64, img_c=3):
             print("results: {0}, acc: {1}".format(results, acc_output))
 
 
-      if mon_sess.should_stop() or step >= args.steps or len(batch_imgs) <= 0:
+      if mon_sess.should_stop() or step >= args.steps or len(batch_imgs) <= batch_size:
         tf_feed.terminate()
 
     # Ask for all the services to stop
