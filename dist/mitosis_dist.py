@@ -158,14 +158,16 @@ def map_fun(args, ctx, model_name="resnet_new", img_h=64, img_w=64, img_c=3):
             logging.info("====== 158")
             # print accuary and save model checkpoints to HDFS every 1000 steps
             if step % 1 == 0:
-              logging.info("{0} step: {1} accuracy: {2} probs: {3} preds: {4} labels: {5}".format(
-                datetime.now().isoformat(),
-                step,
-                mon_sess.run(acc),
-                probs_output,
-                preds_output,
-                labels_output
-                ))
+              logging.info("====== 161")
+              logging.info("{0} step".format(step))
+              # logging.info("{0} step: {1} accuracy: {2} probs: {3} preds: {4} labels: {5}".format(
+              #   datetime.now().isoformat(),
+              #   step,
+              #   mon_sess.run(acc),
+              #   probs_output,
+              #   preds_output,
+              #   labels_output
+              #   ))
             logging.info("====== 169")
 
             if task_index == 0:
