@@ -194,9 +194,9 @@ def map_fun(args, ctx, model_name="resnet_new", img_h=64, img_w=64, img_c=3):
                 datetime.now().isoformat(),
                 step,
                 mon_sess.run(acc),
-                probs_output[0],
-                preds_output[0],
-                labels_output[0]
+                probs_output,
+                preds_output,
+                labels_output
                 ))
 
             if task_index == 0:
