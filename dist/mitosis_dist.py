@@ -93,39 +93,6 @@ def map_fun(args, ctx, model_name="resnet_new", img_h=64, img_w=64, img_c=3):
         probs = tf.nn.sigmoid(logits, name="probs")
         preds = tf.round(probs, name="preds")
 
-      # with tf.name_scope('layer'):
-      #   # Variables of the hidden layer
-      #   with tf.name_scope('hidden_layer'):
-      #     # Convolutional Layer #1
-      #     conv1 = tf.layers.conv2d(
-      #       inputs=images_var,
-      #       filters=32,
-      #       kernel_size=[5, 5],
-      #       padding="same",
-      #       activation=tf.nn.relu)
-      #
-      #     # Pooling Layer #1
-      #     pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[2, 2], strides=2)
-      #
-      #     # Convolutional Layer #2 and Pooling Layer #2
-      #     conv2 = tf.layers.conv2d(
-      #       inputs=pool1,
-      #       filters=64,
-      #       kernel_size=[5, 5],
-      #       padding="same",
-      #       activation=tf.nn.relu)
-      #     pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=[2, 2], strides=2)
-      #
-      #     # Dense Layer
-      #     pool2_flat = tf.reshape(pool2, [-1, 16 * 16 * 64])
-      #     dense = tf.layers.dense(inputs=pool2_flat, units=1024, activation=tf.nn.relu)
-      #     dropout = tf.layers.dropout(inputs=dense, rate=0.4)
-      #
-      #     # Logits Layer
-      #     logits = tf.layers.dense(inputs=dropout, units=1)
-      #     probs = tf.nn.sigmoid(logits, name="probs")
-      #     preds = tf.round(probs, name="preds")
-
       global_step = tf.train.get_or_create_global_step()
 
       with tf.name_scope("loss"):
@@ -168,7 +135,6 @@ def map_fun(args, ctx, model_name="resnet_new", img_h=64, img_w=64, img_c=3):
                                                        images_var,
                                                        preds)]) as mon_sess:
       step = 0
-      batch_imgs = []
       tf_feed = ctx.get_data_feed(args.mode == "train")
       logging.info("Start the step {}".format(step))
 
@@ -183,11 +149,13 @@ def map_fun(args, ctx, model_name="resnet_new", img_h=64, img_w=64, img_c=3):
         logging.info("Start the step {}; the size of image batch is {}"
                      .format(step, len(batch_imgs)))
         if len(batch_imgs) > 0:
+          logging.info("====== 152")
           if args.mode == "train":
+            logging.info("====== 154")
             _, summary, step, metric_update, probs_output, preds_output, labels_output\
               = mon_sess.run([train_op, summary_op, global_step, metric_update_ops, probs, preds, labels_var],
                              feed_dict=feed)
-
+            logging.info("====== 158")
             # print accuary and save model checkpoints to HDFS every 1000 steps
             if step % 1 == 0:
               logging.info("{0} step: {1} accuracy: {2} probs: {3} preds: {4} labels: {5}".format(
@@ -198,6 +166,7 @@ def map_fun(args, ctx, model_name="resnet_new", img_h=64, img_w=64, img_c=3):
                 preds_output,
                 labels_output
                 ))
+            logging.info("====== 169")
 
             if task_index == 0:
               summary_writer.add_summary(summary, step)
