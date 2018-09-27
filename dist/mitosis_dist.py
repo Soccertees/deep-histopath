@@ -136,10 +136,8 @@ def map_fun(args, ctx, model_name="resnet_new", img_h=64, img_w=64, img_c=3):
                                                        preds)]) as mon_sess:
       step = 0
       tf_feed = ctx.get_data_feed(args.mode == "train")
-      logging.info("Start the step {}".format(step))
-
-      if tf_feed.should_stop:
-        logging.info("Some issues get_data_feed")
+      logging.info("Start the training on worker {} at {}".format(
+        socket.gethostname(), datetime.now().isoformat()))
 
       while not mon_sess.should_stop() and not tf_feed.should_stop():
         start_time = time.time()
@@ -149,16 +147,16 @@ def map_fun(args, ctx, model_name="resnet_new", img_h=64, img_w=64, img_c=3):
         logging.info("Start the step {}; the size of image batch is {}"
                      .format(step, len(batch_imgs)))
         if len(batch_imgs) > 0:
-          logging.info("====== 152")
+          #logging.info("====== 152")
           if args.mode == "train":
-            logging.info("====== 154")
+            #logging.info("====== 154")
             _, summary, step, metric_update, probs_output, preds_output, labels_output\
               = mon_sess.run([train_op, summary_op, global_step, metric_update_ops, probs, preds, labels_var],
                              feed_dict=feed)
-            logging.info("====== 158")
+            #logging.info("====== 158")
             # print accuary and save model checkpoints to HDFS every 1000 steps
             if step % 1 == 0:
-              logging.info("====== 161")
+             # logging.info("====== 161")
               logging.info("{0} step".format(step))
               # logging.info("{0} step: {1} accuracy: {2} probs: {3} preds: {4} labels: {5}".format(
               #   datetime.now().isoformat(),
@@ -168,7 +166,7 @@ def map_fun(args, ctx, model_name="resnet_new", img_h=64, img_w=64, img_c=3):
               #   preds_output,
               #   labels_output
               #   ))
-            logging.info("====== 169")
+            #logging.info("====== 169")
 
             if task_index == 0:
               summary_writer.add_summary(summary, step)
@@ -182,7 +180,8 @@ def map_fun(args, ctx, model_name="resnet_new", img_h=64, img_w=64, img_c=3):
           end_time = time.time()
           logging.info("Step {} took {} ms".format(
             step, (end_time - start_time) * 1000))
-
+      logging.info("Finish the training on worker {} at {}".format(
+        socket.gethostname(), datetime.now().isoformat()))
       if mon_sess.should_stop() or step >= args.steps:
         logging.info("Trigger the termination of tf_feed: mon_sess.should_stop "
                      "{}, step >= args.steps {}".format(mon_sess.should_stop(),
