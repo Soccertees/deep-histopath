@@ -139,8 +139,8 @@ def map_fun(args, ctx, model_name="resnet_new", img_h=64, img_w=64, img_c=3):
       logging.info("Start the training on worker {} at {}".format(
         socket.gethostname(), datetime.now().isoformat()))
 
+      start_time = time.time()
       while not mon_sess.should_stop() and not tf_feed.should_stop():
-        start_time = time.time()
         fetch = tf_feed.next_batch(batch_size)
         batch_imgs, batch_labels = feed_dict(fetch)
         feed = {images_var: batch_imgs, labels_var: batch_labels}
@@ -155,9 +155,11 @@ def map_fun(args, ctx, model_name="resnet_new", img_h=64, img_w=64, img_c=3):
                              feed_dict=feed)
             #logging.info("====== 158")
             # print accuary and save model checkpoints to HDFS every 1000 steps
-            if step % 1 == 0:
-             # logging.info("====== 161")
-              logging.info("{0} step".format(step))
+            if step % 100 == 0:
+              end_time = time.time()
+              logging.info("Step {} took {} ms".format(
+                step, (end_time - start_time) * 1000))
+              start_time = time.time()
               # logging.info("{0} step: {1} accuracy: {2} probs: {3} preds: {4} labels: {5}".format(
               #   datetime.now().isoformat(),
               #   step,
@@ -177,9 +179,7 @@ def map_fun(args, ctx, model_name="resnet_new", img_h=64, img_w=64, img_c=3):
             tf_feed.bath_results(results)
             print("results: {0}, acc: {1}".format(results, acc_output))
 
-          end_time = time.time()
-          logging.info("Step {} took {} ms".format(
-            step, (end_time - start_time) * 1000))
+
       logging.info("Finish the training on worker {} at {}".format(
         socket.gethostname(), datetime.now().isoformat()))
       if mon_sess.should_stop() or step >= args.steps:
