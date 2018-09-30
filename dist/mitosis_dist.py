@@ -144,16 +144,11 @@ def map_fun(args, ctx, model_name="resnet_new", img_h=64, img_w=64, img_c=3):
         fetch = tf_feed.next_batch(batch_size)
         batch_imgs, batch_labels = feed_dict(fetch)
         feed = {images_var: batch_imgs, labels_var: batch_labels}
-        logging.info("Start the step {}; the size of image batch is {}"
-                     .format(step, len(batch_imgs)))
         if len(batch_imgs) > 0:
-          #logging.info("====== 152")
           if args.mode == "train":
-            #logging.info("====== 154")
             _, summary, step, metric_update, probs_output, preds_output, labels_output\
               = mon_sess.run([train_op, summary_op, global_step, metric_update_ops, probs, preds, labels_var],
                              feed_dict=feed)
-            #logging.info("====== 158")
             # print accuary and save model checkpoints to HDFS every 1000 steps
             if step % 100 == 0:
               end_time = time.time()
@@ -168,7 +163,6 @@ def map_fun(args, ctx, model_name="resnet_new", img_h=64, img_w=64, img_c=3):
               #   preds_output,
               #   labels_output
               #   ))
-            #logging.info("====== 169")
 
             if task_index == 0:
               summary_writer.add_summary(summary, step)

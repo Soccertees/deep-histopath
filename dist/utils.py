@@ -91,8 +91,6 @@ def read_images(fs, img_path_batch, mode="rb"):
   for (label, img_path) in img_path_batch:
     img = read_image(fs, img_path, mode)
     result.append((label, img))
-    if len(result) % 128 == 0:
-      logging.info("Have read {} of images".format(len(result)))
   logging.info("Finish the reading of {} images on {}".format(
     len(result), socket.gethostname()))
   return result
