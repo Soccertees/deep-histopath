@@ -85,8 +85,9 @@ def main(args=None):
   training_data = []
   training_data.extend(mitosis_label_img_pathes)
   training_data.extend(normal_label_img_pathes)
+  print("+++++++++++ Training data size: {}".format(len(training_data)))
   data_RDD = sc.parallelize(training_data) \
-    .repartition(int(len(training_data)/128/10000)) \
+    .repartition(int(len(training_data)/128/2000)) \
     .mapPartitions(lambda iter : read_images(get_hdfs(args.hdfs_host, args.hdfs_port), iter))
 
   cluster = TFCluster.run(sc, mitosis_dist.map_fun, args, args.cluster_size, num_ps, args.tensorboard,
