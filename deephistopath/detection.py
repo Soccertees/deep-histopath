@@ -81,7 +81,7 @@ def arr_2_csv(arr, csv_file, columns={'row', 'col', 'prob'}):
 
   tuple_2_csv(pred_tuples, csv_file, columns)
 
-def tuple_2_csv(tuple_list, csv_file, columns={'row', 'col', 'prob'}):
+def tuple_2_csv(tuple_list, csv_file, columns=['row', 'col', 'prob']):
   """Save a list of tuples to a csv file
 
   Args:
