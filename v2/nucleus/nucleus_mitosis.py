@@ -6,34 +6,7 @@ https://www.kaggle.com/c/data-science-bowl-2018/
 
 Licensed under the MIT License (see LICENSE for details)
 Written by Waleed Abdulla
-
-------------------------------------------------------------
-
-Usage: import the module (see Jupyter notebooks for examples), or run from
-       the command line as such:
-
-    # Train a new model starting from ImageNet weights
-    python3 nucleus.py train --dataset=/path/to/dataset --subset=train --weights=imagenet
-
-    # Train a new model starting from specific weights file
-    python3 nucleus.py train --dataset=/path/to/dataset --subset=train --weights=/path/to/weights.h5
-
-    # Resume training a model that you had trained earlier
-    python3 nucleus.py train --dataset=/path/to/dataset --subset=train --weights=last
-
-    # Generate submission file
-    python3 nucleus.py detect --dataset=/path/to/dataset --subset=train --weights=<last or /path/to/weights.h5>
 """
-
-# Set matplotlib backend
-# This has to be done before other importa that might
-# set it, but only if we're running in script mode
-# rather than being imported.
-if __name__ == '__main__':
-    import matplotlib
-    # Agg backend runs without a display
-    matplotlib.use('Agg')
-    import matplotlib.pyplot as plt
 
 import os
 import sys
@@ -175,7 +148,7 @@ class NucleusInferenceConfig(NucleusConfig):
     # Don't resize imager for inferencing
     IMAGE_RESIZE_MODE = "pad64"
     # Non-max suppression threshold to filter RPN proposals.
-    # You can increase this during training to generate more propsals.
+    # You can increase this during training to generate more proposals.
     RPN_NMS_THRESHOLD = 0.7
 
 
