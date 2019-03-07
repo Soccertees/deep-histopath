@@ -1,45 +1,41 @@
-import cv2
+import logging
 import math
 import os
-import sys
 import shutil
-import logging
 import time
-import logging
-
-import numpy as np
 from pathlib import Path
 from shutil import copyfile
-from deephistopath.evaluation import add_ground_truth_mark_help
-from deephistopath.visualization import Shape
-from deephistopath.evaluation import get_locations_from_csv, evaluate_global_f1
-from deephistopath.detection import tuple_2_csv, dbscan_clustering, cluster_prediction_result
-from v2.nucleus import nucleus_mitosis
+
+import cv2
+import numpy as np
 import tensorflow as tf
 
-from tensorflow.python.data.ops import dataset_ops
-from train_mitoses import normalize, create_augmented_batch
+from deephistopath.detection import tuple_2_csv, dbscan_clustering, \
+  cluster_prediction_result
+from deephistopath.evaluation import add_ground_truth_mark_help
+from deephistopath.evaluation import get_locations_from_csv, evaluate_global_f1
+from deephistopath.visualization import Shape
 from preprocess_mitoses import extract_patch
-from preprocess_mitoses import gen_patches
 from preprocess_mitoses import save_patch
-from eval_mitoses import evaluate
+from train_mitoses import normalize, create_augmented_batch
+from v2.nucleus import nucleus_mitosis
 
-class ValConfig(object):
+
+class MitosisInferenceConfig(object):
     # step_1: Reorganize the data structure for Mask_RCNN
     mitosis_input_dir = 'data/mitoses/val_image_data/'
     mitosis_reorganized_dir = 'data/mitoses/val_image_data_reorganized/'
 
     # step_2: Crop big images into small ones.
-    # TODO: Currently this value needs to be hard-coded.
     inference_input_dir = 'data/mitoses/val/val_crop_images'
-    crop_image_size = 1024
+    crop_image_size = 512
     crop_image_overlap = 16
 
     # step_3: Run the nucleus segmentation inference
     weights = 'experiments/models/mask_rcnn_nucleus_0380.h5'
     maskrcnn_inference_result_dir = 'data/mitoses/val/val_maskrcnn_inference_result'
 
-    # step_4
+    # step_4: Combine small inference images and csvs to big ones
     maskrcnn_inference_combined_result = \
         'data/mitoses/val/val_maskrcnn_combined_inference_result/'
 
@@ -51,12 +47,12 @@ class ValConfig(object):
     # column.
     hasProb = True
 
-    # step_5
+    # step_5: Visualize the ground truth masks
     ground_truth_dir = 'data/mitoses/val_ground_truth'
 
-    # step_6
+    # step_6: Evaluate the nucleus inference result
 
-    # step_7
+    # step_7: Extract patches according to the inference result
     extracted_nucleus_dir = 'data/mitoses/val/val_extracted_nucleus_patches'
     # the mitosis patch should be bigger than mitosis tile as the patch will be
     # augmented (e.g. rotation) and crop into the mitosis tile.
@@ -66,19 +62,13 @@ class ValConfig(object):
     mitosis_classification_prefetch = 512  # parameter for tf.dataset.prefetch
     mitosis_classification_num_parallel_calls = 8  # parameter for tf.dataset.map
 
-    # step_8
+    # step_8: Run mitosis classification inference
     mitosis_classification_result_dir = 'data/mitoses/val/val_mitosis_classification_result/'
     mitosis_classification_model_file = 'experiments/models/deep_histopath_model.hdf5'
 
-    # step_9
+    # step_9: Compute F1 score
     f1_prob_threshhold = 0.8
 
-
-# Root directory of the project
-ROOT_DIR = os.path.abspath("../../")
-
-# Import Mask RCNN
-sys.path.append(ROOT_DIR)  # To find local version of the library
 
 def reorganize_mitosis_images(input_dir, output_dir):
     input_files = [str(f) for f in Path(input_dir).glob('**/*.tif')]
@@ -94,11 +84,12 @@ def reorganize_mitosis_images(input_dir, output_dir):
         copyfile(file, os.path.join(new_dir, "{}-{}.tif".format(dir_basename, file_basename)))
         print(file_basename, dir_basename)
 
+
 def crop_image(input_imgs, output_dir, size=128, overlap=0):
     if os.path.exists(output_dir):
         shutil.rmtree(output_dir)
-    else:
-        os.makedirs(output_dir, exist_ok=True)
+
+    os.makedirs(output_dir, exist_ok=True)
 
     for input_img in input_imgs:
         basename = os.path.basename(input_img).split('.')[0]
@@ -106,17 +97,17 @@ def crop_image(input_imgs, output_dir, size=128, overlap=0):
 
         h, w, c = img.shape
         y = 0
-        while (y < h):
+        while y < h:
             y1 = y
             y2 = y1 + size
-            if (y2 > h):
+            if y2 > h:
                 y2 = h
                 y1 = h - size
             x = 0
-            while (x < w):
+            while x < w:
                 x1 = x
                 x2 = x1 + size
-                if (x2 > w):
+                if x2 > w:
                     x2 = w
                     x1 = w - size
                 crop_img = img[y1: y2, x1: x2]
@@ -124,10 +115,11 @@ def crop_image(input_imgs, output_dir, size=128, overlap=0):
                 result_dir = os.path.join(output_dir, result_basename, 'images')
                 os.makedirs(result_dir, exist_ok=True)
                 output_file = os.path.join(result_dir, result_basename + '.png')
-                print(output_file)
                 cv2.imwrite(output_file, crop_img)
+                print("Generate the cropped image: {}".format(output_file))
                 x = x + size - overlap
             y = y + size - overlap
+
 
 def combine_images(input_dir, output_dir, size, clean_output_dir=False):
     if clean_output_dir:
@@ -142,8 +134,8 @@ def combine_images(input_dir, output_dir, size, clean_output_dir=False):
         basename, y, x = input_basename
         y = int(y)
         x = int(x)
-        if (not basename in combined_file_size):
-            combined_file_size[basename] = (0,0)
+        if not basename in combined_file_size:
+            combined_file_size[basename] = (0, 0)
 
         combined_file_size[basename] = \
             (max(combined_file_size[basename][0], y+size),
@@ -171,6 +163,7 @@ def combine_images(input_dir, output_dir, size, clean_output_dir=False):
                     0:combined_file_size[basename][0],
                     0:combined_file_size[basename][1], :])
 
+
 def combine_csvs(input_dir, output_dir, hasHeader=True, hasProb=True,
                  clean_output_dir=False):
     if clean_output_dir:
@@ -197,6 +190,7 @@ def combine_csvs(input_dir, output_dir, hasHeader=True, hasProb=True,
                     os.path.join(output_dir, combined_csv) + '.csv',
                     columns=['Y', 'X', 'prob'])
 
+
 def add_groundtruth_mark(im_dir, ground_truth_dir, hasHeader=False, shape=Shape.CROSS,
                          mark_color=(0, 255, 127, 200), hasProb=False):
     im_files = [str(f) for f in Path(im_dir).glob('*.png')]
@@ -211,17 +205,20 @@ def add_groundtruth_mark(im_dir, ground_truth_dir, hasHeader=False, shape=Shape.
         add_ground_truth_mark_help(im_file, ground_truth_file_path,
                                    hasHeader=hasHeader, shape=shape)
 
+
 def add_mark(img_file, csv_file, hasHeader=False, shape=Shape.CROSS,
              mark_color=(0, 255, 127, 200), hasProb=False):
     add_ground_truth_mark_help(img_file, csv_file, hasHeader=hasHeader,
                                shape=shape, mark_color=mark_color,
                                hasProb=hasProb)
 
+
 def is_inside(x1, y1, x2, y2, radius):
     dist = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
     return dist <= radius
 
-def check_nucleius_inference(inference_dir, ground_truth_dir):
+
+def check_nucleus_inference(inference_dir, ground_truth_dir):
     ground_truth_csvs = [str(f) for f in Path(ground_truth_dir).glob('*/*.csv')]
     matched_count = 0
     total_count = 0
@@ -236,15 +233,14 @@ def check_nucleius_inference(inference_dir, ground_truth_dir):
         for (x1, y1) in ground_truth_locations:
             total_count = total_count + 1
             for (x2, y2) in inference_locations:
-                if (is_inside(x2, y2, x1, y1, 32)):
+                if is_inside(x2, y2, x1, y1, 32):
                     matched_count = matched_count + 1
                     break
     print("There are {} ground truth points, found {} of them.".format(
         total_count, matched_count))
 
 
-def extract_patches(img_dir, location_csv_dir, output_patch_basedir,
-                    patch_size=64):
+def extract_patches(img_dir, location_csv_dir, output_patch_basedir, patch_size):
     location_csv_files = [str(f) for f in Path(location_csv_dir).glob('*.csv')]
     if len(location_csv_files) == 0:
         raise ValueError(
@@ -273,6 +269,7 @@ def extract_patches(img_dir, location_csv_dir, output_patch_basedir,
                 row=row, col=col, rotation=0, row_shift=0, col_shift=0,
                 suffix=0, ext="png")
 
+
 def get_image_tf(filename):
   """Get image from filename.
 
@@ -289,12 +286,14 @@ def get_image_tf(filename):
   image = tf.image.convert_image_dtype(image, dtype=tf.float32)
   return image
 
+
 def get_location_from_file_name(filename):
     basename = os.path.basename(str(filename))
     filename_comps = basename.split('_')
     row = int(filename_comps[3])
     col = int(filename_comps[4])
     return row, col
+
 
 def run_mitosis_classification(model,
                                sess,
@@ -329,17 +328,15 @@ def run_mitosis_classification(model,
     else:
       img_dataset = img_dataset \
         .map(lambda img: create_augmented_batch(img, augmentation_number,
-        mitosis_tile_size),
-        num_parallel_calls=num_parallel_calls) \
+                                                mitosis_tile_size),
+             num_parallel_calls=num_parallel_calls) \
         .map(lambda img: normalize(img, "resnet_custom"),
-        num_parallel_calls=num_parallel_calls) \
+             num_parallel_calls=num_parallel_calls) \
         .prefetch(prefetch)
       steps = len(input_file_paths)
 
     img_iterator = img_dataset.make_one_shot_iterator()
     next_batch = img_iterator.get_next()
-
-    prob_result = np.empty((0, 1))
 
     while True:
         try:
@@ -357,7 +354,7 @@ def run_mitosis_classification(model,
       np.average(pred_np.reshape(-1, augmentation_number), axis=1)
 
     print("Finish the inference on {} with {} input tiles"
-      .format(input_dir_path, prob_result.shape))
+          .format(input_dir_path, prob_result.shape))
 
     assert prob_result.shape[0] == input_files.shape[0]
     mitosis_probs = prob_result[prob_result > prob_thres]
@@ -428,8 +425,9 @@ def run_mitosis_classification_in_batch(batch_size,
             augmentation_number, mitosis_tile_size, num_parallel_calls,
             prefectch, prob_thres, eps, min_samples, isWeightedAvg)
 
+
 def main(args):
-    config = ValConfig()
+    config = MitosisInferenceConfig()
     if args.reorganize_folder_structure:
         print("1. Reorganize the data structure for Mask_RCNN")
         reorganize_mitosis_images(
@@ -483,7 +481,7 @@ def main(args):
 
     if args.evaluate_nucleus_inference:
         print("6. Evaluate the nucleus inference result")
-        check_nucleius_inference(config.maskrcnn_inference_combined_result,
+        check_nucleus_inference(config.maskrcnn_inference_combined_result,
                                  config.ground_truth_dir)
 
     if args.extract_nucleus_patch:
@@ -500,7 +498,7 @@ def main(args):
         prob_thres = 0.5,
         eps = 64
         min_samples = 1
-        isWeightedAvg = False
+        is_weighted_avg = False
         run_mitosis_classification_in_batch(
             batch_size=batch_size,
             input_dir_basepath=config.extracted_nucleus_dir,
@@ -513,7 +511,7 @@ def main(args):
             prob_thres=prob_thres,
             eps=eps,
             min_samples=min_samples,
-            isWeightedAvg=isWeightedAvg)
+            isWeightedAvg=is_weighted_avg)
 
     if args.compute_f1:
         print("9. Compute F1 score")
@@ -531,6 +529,7 @@ def main(args):
               "TP: {} \n"
               "FN: {} \n".format(f1, precision, recall, len(over_detected),
                                  len(non_detected), len(FP), len(TP), len(FN)))
+
 
 if __name__ == '__main__':
     import argparse
