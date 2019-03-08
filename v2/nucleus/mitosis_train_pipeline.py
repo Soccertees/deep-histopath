@@ -687,8 +687,7 @@ if __name__ == '__main__':
                          help="Add a label for the detected nuclei based on "
                               "the ground truth data: True means the detected "
                               "nucleus is a motosis; False means it is not a "
-                              "motosis")
-
+                              "mitosis")
     parser.add_argument("--gen_mitosis_normal_tile", required=False, default=False,
                         action="store_true", help="Extract the patches from the "
                                                   "train images based on the "
@@ -700,12 +699,9 @@ if __name__ == '__main__':
                         default=False, action="store_true",
                         help="Split the tiles into train and validation folers")
 
-    parser.add_argument("--run_mitosis_classification", required=False, action="store_true",
-                        default=False, help="Run the mitosis detection model to"
-                                            "classify if the input image is a "
-                                            "mitosis or not")
-    parser.add_argument("--compute_f1", required=False, default=False, action="store_true",
-                        help="Compute F1 score")
+    parser.add_argument("--train_model", required=False, action="store_true",
+                        default=False, help="Train the mitosis classification "
+                                            "model")
     args = parser.parse_args()
     main(args)
     end_time = time.time() - start_time
