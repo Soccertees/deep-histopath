@@ -5,3 +5,4 @@ model
 *.zip
 **/filters*.html
 **/tiles*.html
+**__pycache__**
