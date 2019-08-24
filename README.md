@@ -42,7 +42,9 @@ References: <br />
 [3] [`preprocess.py`](preprocess.py), [`breastcancer/preprocessing.py`](breastcancer/preprocessing.py) <br />
 [4] [`MachineLearning-Keras-ResNet50.ipynb`](MachineLearning-Keras-ResNet50.ipynb) <br />
 [5] [`preprocess_mitoses.py`](preprocess_mitoses.py), [`train_mitoses.py`](train_mitoses.py) <br />
-[6] https://arxiv.org/abs/1612.07180
+[6] https://arxiv.org/abs/1612.07180 <br />
+[7] https://github.com/MrGiovanni/UNetPlusPlus <br />
+[8] https://github.com/SimonKohl/probabilistic_unet <br />
 
 ![Approach](approach.jpg)
 

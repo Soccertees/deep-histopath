@@ -5,3 +5,7 @@ model
 *.zip
 **/filters*.html
 **/tiles*.html
+*__pycache__*
+.DS_Store
+.idea
+*.iml
