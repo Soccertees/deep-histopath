@@ -323,7 +323,7 @@ def predict_mitoses_help(model_file, model_name, index, file_partition,
         continue
       mitosis_location_score_list = []
       # predict the mitoses with location information
-      mitosis_num, mitosis_location_scores  = predict_mitoses_num_locations(model=model,
+      mitosis_num, mitosis_location_scores = predict_mitoses_num_locations(model=model,
                                                     model_name=model_name, threshold=threshold,
                                                     ROI=ROI, tile_size=tile_size,
                                                     tile_overlap=tile_overlap,
@@ -528,7 +528,7 @@ def predict_mitoses_gpu(sparkContext, model_path, model_name, input_dir, file_su
 
   # assign GPU id to each partition, and then run the predict function for each partition.
   predictions_rdd = slide_rdd.mapPartitionsWithIndex(lambda index, p: [(split_index_2_gpu_id[index], p)])\
-    .flatMap(lambda t : predict_mitoses_help(model_file=model_path, model_name = model_name,
+    .flatMap(lambda t: predict_mitoses_help(model_file=model_path, model_name = model_name,
                                           index=t[0], file_partition=t[1], ROI_size=ROI_size,
                                          ROI_overlap=ROI_overlap, ROI_channel=ROI_channel,
                                          skipROI=skipROI,

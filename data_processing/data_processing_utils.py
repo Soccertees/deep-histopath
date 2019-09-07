@@ -5,10 +5,23 @@ import pandas as pd
 from pathlib import Path
 from PIL import Image
 import re
+import sys
 
 
-FILE_ID_RE = "(\d+/\d+|\d+-\d+)[.csv|/clustered_mitosis_locations.csv|.tif|_mark.tif|_mask.tif]"
+FILE_ID_RE = "(\d+/\d+|\d+-\d+)[.csv|/clustered_mitosis_locations.csv|.tif|_mark.tif|_mask.tif|.png|_mark.png|_mask.png]"
 
+def progressbar(it, prefix="", size=60, file=sys.stdout):
+    count = len(it)
+    def show(j):
+        x = int(size*j/count)
+        file.write("%s[%s%s] %i/%i\r" % (prefix, "#"*x, "."*(size-x), j, count))
+        file.flush()
+    show(0)
+    for i, item in enumerate(it):
+        yield item
+        show(i+1)
+    file.write("\n")
+    file.flush()
 
 def get_image_size(img_file):
   """ Get the size of the input image file.
@@ -79,7 +92,7 @@ def list_files(file_dir, file_suffix):
   return files
 
 
-def get_file_id(files, file_id_re):
+def get_file_id(files, file_id_re=FILE_ID_RE):
   """ get the file id using the file id regular expression
   Args:
     files: list of input file paths

@@ -1,22 +1,16 @@
-import keras.backend as K
-from keras.layers import Input
-from keras.layers import Conv2D
-from keras.layers import MaxPooling2D
-from keras.layers import BatchNormalization
-from keras.layers import Activation
-from keras.layers import GlobalAveragePooling2D
-from keras.layers import ZeroPadding2D
-from keras.layers import Dense
-from keras.models import Model
-from keras.engine import get_source_inputs
+from tensorflow_core.python.keras import backend as K
+from tensorflow_core.python.keras.engine.input_layer import Input
+from tensorflow_core.python.keras.layers.convolutional import Conv2D
+from tensorflow_core.python.keras.layers.pooling import MaxPooling2D
+from tensorflow_core.python.keras.layers.normalization import BatchNormalization
+from tensorflow_core.python.keras.layers.core import Activation
+from tensorflow_core.python.keras.layers.pooling import GlobalAveragePooling2D
+from tensorflow_core.python.keras.layers.convolutional import ZeroPadding2D
+from tensorflow_core.python.keras.layers.core import Dense
+from tensorflow_core.python.keras.models import Model
+from tensorflow_core.python.keras.utils.layer_utils import get_source_inputs
 
-import keras
-from distutils.version import StrictVersion
-
-if StrictVersion(keras.__version__) < StrictVersion('2.2.0'):
-    from keras.applications.imagenet_utils import _obtain_input_shape
-else:
-    from keras_applications.imagenet_utils import _obtain_input_shape
+from keras_applications.imagenet_utils import _obtain_input_shape
 
 from .params import get_conv_params
 from .params import get_bn_params
